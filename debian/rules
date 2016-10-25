@@ -1,0 +1,50 @@
+#!/usr/bin/make -f
+
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+	CONFIG_OPT = --enable-debug
+endif
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	INSTALL_OPT += -s
+endif
+
+
+CONFIG_OPT += --prefix=$(CURDIR)/debian/tilesim/usr --exec-prefix=$(CURDIR)/debian/tilesim/usr --mandir=$(CURDIR)/debian/tilesim/usr/share/man --with-dbrecord=yes --with-xml2-config --enable-presentation --disable-debug
+
+build: build-stamp
+build-stamp:
+	rm -f debian/files debian/files.new debian/substvars
+	./autogen.sh
+	./configure $(CONFIG_OPT) CFLAGS="${CFLAGS} -fPIC" CXXFLAGS="${CXXFLAGS} -fPIC"
+	$(MAKE)
+	touch build-stamp
+
+binary: binary-indep binary-arch
+binary-indep:
+binary-arch: build install
+	install -d debian/tilesim/DEBIAN debian/tilesim/usr/bin debian/tilesim/usr/share/doc/tilesim debian/tilesim/usr/share/man/man1
+	install -m644 -p ChangeLog debian/tilesim/usr/share/doc/tilesim/changelog
+	gzip -9f debian/tilesim/usr/share/doc/tilesim/changelog
+	install -m644 -p debian/changelog debian/tilesim/usr/share/doc/tilesim/changelog.Debian
+	gzip -9f debian/tilesim/usr/share/doc/tilesim/changelog.Debian
+	install -m644 -p debian/copyright debian/tilesim/usr/share/doc/tilesim
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	strip --strip-unneeded -R .comment \
+		debian/tilesim/usr/bin/tswx \
+		debian/tilesim/usr/bin/tsglut \
+		debian/tilesim/usr/bin/tscli \
+		debian/tilesim/usr/bin/squarecreator
+endif
+	dpkg-shlibdeps debian/tilesim/usr/bin/tilesim
+	dpkg-gencontrol -isp -Pdebian/tilesim -ptilesim
+	cd debian/tilesim && find usr -type f -exec "md5sum" "{}" ";" > DEBIAN/md5sums
+	dpkg-deb --build debian/tilesim ..
+
+clean:
+	rm -f build-stamp debian/files debian/files.new debian/substvars
+	rm -fR debian/tilesim
+	-$(MAKE) clean
+
+install: build
+	$(MAKE) install
+
+.PHONY: build build-arch build-indep binary binary-indep binary-arch clean install

@@ -1,0 +1,16 @@
+Source: tilesim
+Section: libs
+Priority: optional
+Maintainer: Yunhui Fu  <yhfudev@gmail.com>
+Build-Depends: automake, libxml2-dev (>=2.6), libigraph-dev
+Standards-Version: 0.0.0.1
+
+Package: tilesim
+Architecture: any
+Section: libs
+Depends: ${shlibs:Depends}, libxml2 (>=2.6), libigraph
+Suggests:
+Conflicts:
+Replaces:
+Description: supertile simulation system
+ Contains GUI and command line tools, and the testing utilities.

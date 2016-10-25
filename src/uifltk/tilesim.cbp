@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="tilesim" />
+		<Option pch_mode="2" />
+		<Option compiler="gcc" />
+		<Build>
+			<Target title="Debug">
+				<Option output="bin/Debug/tilesim" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Debug/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-g" />
+					<Add directory="/usr/include/libxml2" />
+					<Add directory="../core" />
+					<Add directory="../display" />
+				</Compiler>
+				<Linker>
+					<Add option="-lGL -lfltk -lfltk_gl -lxml2" />
+				</Linker>
+			</Target>
+			<Target title="Release">
+				<Option output="bin/Release/tilesim" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="0" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-O2" />
+					<Add option="-s" />
+				</Compiler>
+			</Target>
+		</Build>
+		<Compiler>
+			<Add option="`fltk-config --cxxflags`" />
+		</Compiler>
+		<Linker>
+			<Add option="`fltk-config --ldstaticflags`" />
+			<Add library="xml2" />
+			<Add library="igraph" />
+			<Add library="dbi" />
+		</Linker>
+		<Unit filename="../core/bitset.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../core/bitset.h" />
+		<Unit filename="../core/bthread.h" />
+		<Unit filename="../core/bthwrap4pth.h" />
+		<Unit filename="../core/datasql.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../core/datasql.h" />
+		<Unit filename="../core/pfutils.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../core/pfutils.h" />
+		<Unit filename="../core/tilestruct.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../core/tilestruct.h" />
+		<Unit filename="../display/glutfont.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../display/glutfont.h" />
+		<Unit filename="../display/tileog.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../display/tileog.h" />
+		<Unit filename="../display/tilepresent.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../display/tilepresent.h" />
+		<Unit filename="tsfltk.cpp" />
+		<Extensions>
+			<code_completion />
+			<envvars />
+			<debugger />
+			<lib_finder disable_auto="1" />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>

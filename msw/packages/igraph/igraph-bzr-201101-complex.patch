@@ -1,0 +1,13 @@
+diff -Nur igraph-bzr-origin/src/cs/cs.h igraph-bzr/src/cs/cs.h
+--- igraph-bzr-origin/src/cs/cs.h	2011-01-15 17:30:49.000000000 -0500
++++ igraph-bzr/src/cs/cs.h	2011-01-15 22:00:10.000000000 -0500
+@@ -28,6 +28,9 @@
+ #include "mex.h"
+ #endif
+ 
++#ifdef __CYGWIN__
++#define NCOMPLEX 1
++#endif
+ 
+ #ifdef __cplusplus
+ #ifndef NCOMPLEX

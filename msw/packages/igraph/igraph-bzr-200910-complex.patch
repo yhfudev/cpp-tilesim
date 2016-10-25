@@ -1,0 +1,12 @@
+--- igraph-bzr-origin/src/cs/cs.h	2009-10-03 10:43:47.000000000 -0500
++++ igraph-bzr/src/cs/cs.h	2009-10-03 11:38:59.000000000 -0500
+@@ -8,6 +8,9 @@
+ #include "mex.h"
+ #endif
+ 
++#ifdef __CYGWIN__
++#define NCOMPLEX 1
++#endif
+ 
+ #ifdef __cplusplus
+ #ifndef NCOMPLEX

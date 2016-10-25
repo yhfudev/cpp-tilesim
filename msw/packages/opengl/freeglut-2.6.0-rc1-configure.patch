@@ -1,0 +1,64 @@
+diff -Nur freeglut-2.6.0-origin/config.h.in freeglut-2.6.0/config.h.in
+--- freeglut-2.6.0-origin/config.h.in	2009-04-20 22:53:09.000000000 -0500
++++ freeglut-2.6.0/config.h.in	2009-10-01 16:59:50.000000000 -0500
+@@ -72,6 +72,13 @@
+ /* Define to 1 if you have the <X11/extensions/XI.h> header file. */
+ #undef HAVE_X11_EXTENSIONS_XI_H
+ 
++/* Define if you're a Bill worshipper. */
++#undef IS_WIN32
++
++/* Define to the sub-directory in which libtool stores uninstalled libraries.
++   */
++#undef LT_OBJDIR
++
+ /* Define to 1 if your C compiler doesn't accept -c and -o together. */
+ #undef NO_MINUS_C_MINUS_O
+ 
+@@ -102,9 +109,6 @@
+ /* Version number of package */
+ #undef VERSION
+ 
+-/* Define to 1 if the X Window System is missing or not being used. */
+-#undef X_DISPLAY_MISSING
+-
+ /* Define to 1 if you want to include debugging code. */
+ #undef _DEBUG
+ 
+diff -Nur freeglut-2.6.0-origin/configure.ac freeglut-2.6.0/configure.ac
+--- freeglut-2.6.0-origin/configure.ac	2009-04-20 22:52:10.000000000 -0500
++++ freeglut-2.6.0/configure.ac	2009-10-01 16:58:58.000000000 -0500
+@@ -1,5 +1,20 @@
+ # Process this file with autoconf to produce a configure script.
+ 
++# Check for WIN32, without needing all the config.guess bulkiness.
++# http://angband.pl/viewvc/termrec/branches/vt100-events/ac_check_win32.m4
++AC_DEFUN([AC_CHECK_WIN32], [
++AC_CACHE_CHECK([for Win32], [ac_cv_is_win32], [
++ac_check_win32_save_LIBS=$LIBS
++LIBS=-lgdi32
++AC_LINK_IFELSE([#include <windows.h>
++int main(){TextOutW(0,0,0,0,0);return 0;}], [ac_cv_is_win32=yes], [ac_cv_is_win32=no])
++LIBS=$ac_check_win32_save_LIBS
++])
++if test $ac_cv_is_win32 = yes; then
++  AC_DEFINE([IS_WIN32], 1, [Define if you're a Bill worshipper.])
++fi
++])
++
+ AC_INIT([freeglut library], [2.6.0], [freeglut-bugs@lists.sourceforge.net], [freeglut])
+ AM_INIT_AUTOMAKE
+ AC_PREREQ([2.56])
+@@ -19,9 +34,10 @@
+ AC_SUBST([LIBTOOL_DEPS])
+ 
+ # Checks for libraries.
+-AC_PATH_XTRA
++#AC_PATH_XTRA
++AC_CHECK_WIN32
+ 
+-if test x"$no_x" = xyes; then
++if test x"$ac_cv_is_win32" = xyes; then
+   GL_LIBS="-lopengl32 -lgdi32 -lwinmm"
+   LIBXXF86VM=
+   LIBXI=

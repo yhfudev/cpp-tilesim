@@ -1,0 +1,28 @@
+diff -NurP freeglut-2.6.0-origin/include/GL/freeglut_std.h freeglut-2.6.0/include/GL/freeglut_std.h
+--- freeglut-2.6.0-origin/include/GL/freeglut_std.h	2009-04-20 23:52:10.000000000 -0400
++++ freeglut-2.6.0/include/GL/freeglut_std.h	2011-01-15 19:53:16.000000000 -0500
+@@ -58,7 +58,7 @@
+ #    define WIN32_LEAN_AND_MEAN 1
+ #  endif
+ #   define NOMINMAX
+-#   include <Windows.h>
++#   include <windows.h>
+ 
+ /* Windows static library */
+ #   ifdef FREEGLUT_STATIC
+diff -NurP freeglut-2.6.0-origin/src/freeglut_internal.h freeglut-2.6.0/src/freeglut_internal.h
+--- freeglut-2.6.0-origin/src/freeglut_internal.h	2009-04-20 23:52:09.000000000 -0400
++++ freeglut-2.6.0/src/freeglut_internal.h	2011-01-15 19:53:31.000000000 -0500
+@@ -90,9 +90,9 @@
+  * because the cross-platform includes are case sensitive.
+  */
+ #if TARGET_HOST_MS_WINDOWS && !defined(_WIN32_WCE)
+-#    include <Windows.h>
+-#    include <WindowsX.h>
+-#    include <MMSystem.h>
++#    include <windows.h>
++#    include <windowsx.h>
++#    include <mmsystem.h>
+ /* CYGWIN does not have tchar.h, but has TEXT(x), defined in winnt.h. */
+ #    ifndef __CYGWIN__
+ #      include <tchar.h>

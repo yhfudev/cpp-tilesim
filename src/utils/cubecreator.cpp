@@ -1,0 +1,900 @@
+/******************************************************************************
+ * Name:        cubecreator.cpp
+ * Purpose:     Supertile Self-assembly Simulator data creator: cube
+ * Author:      Yunhui Fu
+ * Created:     2009-08-22
+ * Modified by:
+ * RCS-ID:      $Id: $
+ * Copyright:   (c) 2009 Yunhui Fu
+ * Licence:     GPL licence version 3
+ ******************************************************************************/
+
+#include <assert.h>
+#include <getopt.h>
+#include <math.h>
+#include <stdlib.h> // atoi()
+#include <stdio.h>
+
+#include "cubeface.h"
+
+#define VERSION_MAJOR 0
+#define VERSION_MINOR 1
+
+#define XML_VERSION_MAJOR 0
+#define XML_VERSION_MINOR 2
+
+/*
+
+         Z1                  Z1    
+     *-------*           *-------*
+    /       /|          /       /| 
+0  /   0   / |      0  /  Y1   / |
+  /       /  |        /       /  |
+ /       /   |       /       /   |
+*-------* X1 *      *-------* X1 *
+|       |   /       |       |   /
+|       |  /        |       |  / 
+|   0   | /         |   Z1  | /
+|       |/          |       |/
+*-------*           *-------*
+    By                  Y1  
+         Z1                 0                    Z     
+     *-------*          *-------*            *-------*
+    /       /|         /       /|           /       /| 
+0  /  By   / |     0  /  Y1   / |       X  /  Y    / |
+  /       /  |       /       /  |         /       /  |
+ /       /   |      /       /   |        /       /   |
+*-------* X1 *     *-------* X1 *       *-------* X  *
+|       |   /      |       |   /        |       |   /
+|       |  /       |       |  /         |       |  / 
+|   0   | /        |   Bz  | /          |   Z   | /
+|       |/         |       |/           |       |/
+*-------*          *-------*            *-------*
+    Ay                 0                    Y   
+
+                 Bz                  Z1    
+             *-------*           *-------* 
+            /       /|          /       /| 
+        0  /   Y1  / |      X1 /   Y   / | 
+          /       /  |        /       /  | 
+         /       /   |       /       /   | 
+        *-------* X1 *      *-------* X1 * 
+        |       |   /       |       |   /  
+        |       |  /        |       |  /   
+        |   Az  | /         |   Z1  | /    
+        |       |/          |       |/     
+        *-------*           *-------*      
+            0                   0          
+                        Z 
+                    *-------*
+                   /       /|
+               X1 /   Y1  / |
+                 /       /  |
+                /       /   |
+               *-------* X1 *
+               |       |   /
+               |       |  /
+               |   0   | /
+               |       |/
+               *-------*
+                   Y1
+         Az                 Z1                  Z1    
+     *-------*          *-------*           *-------* 
+    /       /|         /       /|          /       /| 
+0  /  Ay   / |     Ax /  Y1   / |      Bx /  Y1   / | 
+  /       /  |       /       /  |        /       /  | 
+ /       /   |      /       /   |       /       /   | 
+*-------* Ax *     *-------* Bx *      *-------*  0 * 
+|       |   /      |       |   /       |       |   /  
+|       |  /       |       |  /        |       |  /   
+|   0   | /        |   0   | /         |   0   | /    
+|       |/         |       |/          |       |/     
+*-------*          *-------*           *-------*      
+    0                  0                   0          
+
+*/
+
+// 要生成 nxnxn 的立方体，则：
+// 如果 tile 不可旋转，则类型个数为 3n + 2 个，glue类型为 n + 1
+// 由于对称性，可以将形成立方体所需的 tile 声明为可旋转的，并且将类型减少到 n + 4 个，glue类型为 n + 1
+int
+out_cube_skeleton (size_t n, size_t max_num_tiles, size_t temperature, const char *fname)
+{
+    char flg_norotate = 1;
+    size_t steps_1year_min = 10;
+    size_t steps_1year_max = 100;
+    size_t year_current = 0;
+
+    size_t i;
+    size_t idx;
+    size_t sz_tilelist;
+    size_t cnt;
+    size_t times_square;
+    FILE *fp_xml = NULL;
+    size_t x, y, z;
+
+    int glue_plane;
+    int glue_middle;
+    int glue_edge_start;
+    int tile_middle;
+    int tile_corner;
+    int tile_edge_start_x;
+    int tile_edge_start_y;
+    int tile_edge_start_z;
+    int tile_end_x;
+    int tile_end_y;
+    int tile_end_z;
+    int tile_plane_middle_xy;
+    int tile_plane_middle_yz;
+    int tile_plane_middle_zx;
+
+    if (n < 2) {
+        fprintf (stderr, "the N(%d) should be > 1\n", n);
+        return -1;
+    }
+    if (temperature < 3) {
+        fprintf (stderr, "the temperture(%d) should be > 2\n", temperature);
+        return -1;
+    }
+    times_square = max_num_tiles / (n * n);
+    if (times_square < 5) {
+        times_square = 5;
+    }
+    fprintf (stderr, "the times of square of type Skeleton(%dX%d): %d\n", n, n, times_square);
+
+    fp_xml = fopen (fname, "w");
+    if (NULL == fp_xml) {
+        return -1;
+    }
+
+    fprintf (fp_xml, "<?xml version='1.0' encoding='utf-8' ?>\n");
+    fprintf (fp_xml, "<!-- Auto-generated by the cube creator. -->\n");
+    fprintf (fp_xml, "<tilesim>\n  <version>\n    <major>%d</major>\n    <minor>%d</minor>\n  </version>\n", XML_VERSION_MAJOR, XML_VERSION_MINOR);
+
+    rottab_gen_default ();
+    tssim_save_encoding_3d (fp_xml);
+
+    fprintf (fp_xml, "  <temperature>%d</temperature>\n", temperature);
+    fprintf (fp_xml, "  <rotatable>%s</rotatable>\n", ((0 == flg_norotate)?"true":"false"));
+
+    assert (((0 != steps_1year_max) && (steps_1year_max > steps_1year_min)) || (0 == steps_1year_max));
+    fprintf (fp_xml, "  <simulationsetup>\n");
+    fprintf (fp_xml, "    <currentyear>%d</currentyear>\n", year_current);
+    fprintf (fp_xml, "    <stepsmin>%d</stepsmin>\n", steps_1year_min);
+    fprintf (fp_xml, "    <stepsmax>%d</stepsmax>\n", steps_1year_max);
+    fprintf (fp_xml, "  </simulationsetup>\n");
+
+    // the glue of strenth 0
+    idx = 0;
+    fprintf (fp_xml,
+        "  <glue>\n"
+        "    <id>%d</id>\n"
+        "    <strength>%d</strength>\n"
+        "  </glue>\n"
+        , idx, 0);
+    idx ++;
+
+    // the glues between tiles in middle of the cube
+    glue_middle = idx;
+    fprintf (fp_xml,
+        "  <glue>\n"
+        "    <id>%d</id>\n"
+        "    <strength>%d</strength>\n"
+        "  </glue>\n"
+        , idx, (temperature + 2) / 3 /*3D*/);
+    idx ++;
+
+    // the glues between tiles in the edge plane
+    glue_plane = idx;
+    fprintf (fp_xml,
+        "  <glue>\n"
+        "    <id>%d</id>\n"
+        "    <strength>%d</strength>\n"
+        "  </glue>\n"
+        , idx, (temperature + 1) / 2);
+    idx ++;
+
+    // the glues between tiles in the skeleton edges lines:
+    glue_edge_start = idx;
+    for (; idx < glue_edge_start + n - 1; idx ++) {
+        fprintf (fp_xml,
+            "  <glue>\n"
+            "    <id>%d</id>\n"
+            /*"    <name>%d</name>\n"*/
+            "    <strength>%d</strength>\n"
+            "  </glue>\n"
+            , idx, temperature);
+    }
+
+    idx = 0;
+    // the tile in the middle of cube
+    tile_middle = idx;
+    fprintf (fp_xml,
+        "  <tile>\n"
+        "    <id>%d</id>\n"
+        "    <north>%d</north>\n"
+        "    <east>%d</east>\n"
+        "    <south>%d</south>\n"
+        "    <west>%d</west>\n"
+        "    <front>%d</front>\n"
+        "    <back>%d</back>\n"
+        "  </tile>\n"
+        , idx, glue_middle, glue_middle, glue_middle, glue_middle, glue_middle, glue_middle);
+    idx ++;
+
+    // the tile in the corner of cube
+    tile_corner = idx;
+    fprintf (fp_xml,
+        "  <tile>\n"
+        "    <id>%d</id>\n"
+        "    <north>%d</north>\n"
+        "    <east>%d</east>\n"
+        "    <south>%d</south>\n"
+        "    <west>%d</west>\n"
+        "    <front>%d</front>\n"
+        "    <back>%d</back>\n"
+        "  </tile>\n"
+        , idx, glue_edge_start, glue_edge_start, 0, 0, 0, glue_edge_start);
+    idx ++;
+
+    // the tile in the middle of plane xy
+    tile_plane_middle_xy = idx;
+    fprintf (fp_xml,
+        "  <tile>\n"
+        "    <id>%d</id>\n"
+        "    <north>%d</north>\n"
+        "    <east>%d</east>\n"
+        "    <south>%d</south>\n"
+        "    <west>%d</west>\n"
+        "    <front>%d</front>\n"
+        "    <back>%d</back>\n"
+        "  </tile>\n"
+        , idx, glue_plane, glue_plane, glue_plane, glue_plane, 0, glue_middle);
+    idx ++;
+
+    // the tile in the middle of plane yz
+    tile_plane_middle_yz = idx;
+    fprintf (fp_xml,
+        "  <tile>\n"
+        "    <id>%d</id>\n"
+        "    <north>%d</north>\n"
+        "    <east>%d</east>\n"
+        "    <south>%d</south>\n"
+        "    <west>%d</west>\n"
+        "    <front>%d</front>\n"
+        "    <back>%d</back>\n"
+        "  </tile>\n"
+        , idx, glue_plane, glue_middle, glue_plane, 0, glue_plane, glue_plane);
+    idx ++;
+
+    // the tile in the middle of plane zx
+    tile_plane_middle_zx = idx;
+    fprintf (fp_xml,
+        "  <tile>\n"
+        "    <id>%d</id>\n"
+        "    <north>%d</north>\n"
+        "    <east>%d</east>\n"
+        "    <south>%d</south>\n"
+        "    <west>%d</west>\n"
+        "    <front>%d</front>\n"
+        "    <back>%d</back>\n"
+        "  </tile>\n"
+        , idx, glue_middle, glue_plane, 0, glue_plane, glue_plane, glue_plane);
+    idx ++;
+
+    // the tiles in the skeleton edges: (dir:x east)
+    tile_edge_start_x = idx;
+    for (i = 0; i < n - 2; i ++) {
+        fprintf (fp_xml,
+            "  <tile>\n"
+            "    <id>%d</id>\n"
+            "    <north>%d</north>\n"
+            "    <east>%d</east>\n"
+            "    <south>%d</south>\n"
+            "    <west>%d</west>\n"
+            "    <front>%d</front>\n"
+            "    <back>%d</back>\n"
+            "  </tile>\n"
+            , idx + i, glue_plane, glue_edge_start + i + 1, 0, glue_edge_start + i, 0, glue_plane);
+    }
+    idx += i;
+    tile_end_x = idx;
+    fprintf (fp_xml,
+        "  <tile>\n"
+        "    <id>%d</id>\n"
+        "    <north>%d</north>\n"
+        "    <east>%d</east>\n"
+        "    <south>%d</south>\n"
+        "    <west>%d</west>\n"
+        "    <front>%d</front>\n"
+        "    <back>%d</back>\n"
+        "  </tile>\n"
+        , idx, glue_plane, 0, 0, glue_edge_start + i, 0, glue_plane);
+    idx ++;
+
+    // the tiles in the skeleton edges: (dir: y north)
+    tile_edge_start_y = idx;
+    for (i = 0; i < n - 2; i ++) {
+        fprintf (fp_xml,
+            "  <tile>\n"
+            "    <id>%d</id>\n"
+            "    <north>%d</north>\n"
+            "    <east>%d</east>\n"
+            "    <south>%d</south>\n"
+            "    <west>%d</west>\n"
+            "    <front>%d</front>\n"
+            "    <back>%d</back>\n"
+            "  </tile>\n"
+            , idx + i, glue_edge_start + i + 1, glue_plane, glue_edge_start + i, 0, 0, glue_plane);
+    }
+    idx += i;
+    tile_end_y = idx;
+    fprintf (fp_xml,
+        "  <tile>\n"
+        "    <id>%d</id>\n"
+        "    <north>%d</north>\n"
+        "    <east>%d</east>\n"
+        "    <south>%d</south>\n"
+        "    <west>%d</west>\n"
+        "    <front>%d</front>\n"
+        "    <back>%d</back>\n"
+        "  </tile>\n"
+        , idx, 0, glue_plane, glue_edge_start + i, 0, 0, glue_plane);
+    idx ++;
+
+    // the tiles in the skeleton edges: (dir: z back)
+    tile_edge_start_z = idx;
+    for (i = 0; i < n - 2; i ++) {
+        fprintf (fp_xml,
+            "  <tile>\n"
+            "    <id>%d</id>\n"
+            "    <north>%d</north>\n"
+            "    <east>%d</east>\n"
+            "    <south>%d</south>\n"
+            "    <west>%d</west>\n"
+            "    <front>%d</front>\n"
+            "    <back>%d</back>\n"
+            "  </tile>\n"
+            , idx + i, glue_plane, glue_plane, 0, 0, glue_edge_start + i, glue_edge_start + i + 1);
+    }
+    idx += i;
+    tile_end_z = idx;
+    fprintf (fp_xml,
+        "  <tile>\n"
+        "    <id>%d</id>\n"
+        "    <north>%d</north>\n"
+        "    <east>%d</east>\n"
+        "    <south>%d</south>\n"
+        "    <west>%d</west>\n"
+        "    <front>%d</front>\n"
+        "    <back>%d</back>\n"
+        "  </tile>\n"
+        , idx, glue_plane, glue_plane, 0, 0, glue_edge_start + i, 0);
+    idx ++;
+    sz_tilelist = idx;
+
+    for (i = 0; i < sz_tilelist; i ++) {
+        if (i == tile_middle) {
+            cnt = times_square * (n - 1) * (n - 1) * (n - 1);
+        } else if (i == tile_corner) {
+            cnt = times_square;
+        } else if ((tile_edge_start_x <= i) && (i <= tile_end_x)) {
+            cnt = times_square;
+        } else if ((tile_edge_start_y <= i) && (i <= tile_end_y)) {
+            cnt = times_square;
+        } else if ((tile_edge_start_z <= i) && (i <= tile_end_z)) {
+            cnt = times_square;
+        } else if (i == tile_plane_middle_xy) {
+            cnt = times_square * (n - 1) * (n - 1);
+        } else if (i == tile_plane_middle_yz) {
+            cnt = times_square * (n - 1) * (n - 1);
+        } else if (i == tile_plane_middle_zx) {
+            cnt = times_square * (n - 1) * (n - 1);
+        } else {
+            cnt = times_square;
+        }
+        fprintf (fp_xml,
+            "  <supertile>\n"
+            "    <id>%d</id>\n"
+            "    <quantity>%d</quantity>\n"
+            "    <birth>%d</birth>\n"
+            , i, cnt, 0);
+        fprintf (fp_xml,
+            "    <tileitem>\n"
+            "      <id>%d</id>\n"
+            "      <tileid>%d</tileid>\n"
+            "      <rotnum>%d</rotnum>\n"
+            "      <x>%d</x>\n"
+            "      <y>%d</y>\n"
+            "      <z>%d</z>\n"
+            "    </tileitem>\n"
+            , 0, i, 0, 0, 0, 0);
+        fprintf (fp_xml, "  </supertile>\n");
+    }
+    fprintf (fp_xml, "  <targetsupertile>\n");
+
+    i = 0;
+    for (z = 0; z < n; z ++) {
+    for (y = 0; y < n; y ++) {
+    for (x = 0; x < n; x ++) {
+
+        size_t tileid;
+        if (x == 0) {
+            if (y == 0) {
+                if (z == 0) {
+                    tileid = tile_corner;
+                } else if (z == n - 1) {
+                    tileid = tile_end_z;
+                } else {
+                    tileid = tile_edge_start_z + z - 1;
+                }
+            } else {
+                if (z == 0) {
+                    if (y == n - 1) {
+                        tileid = tile_end_y;
+                    } else /*if (y != 0)*/ {
+                        assert (y != 0);
+                        tileid = tile_edge_start_y + y - 1;
+                    }
+                } else {
+                    tileid = tile_plane_middle_yz;
+                }
+            }
+        } else {
+            if (y == 0) {
+                if (z == 0) {
+                    if (x == n - 1) {
+                        tileid = tile_end_x;
+                    } else /*if (x != 0)*/ {
+                        assert (x != 0);
+                        tileid = tile_edge_start_x + x - 1;
+                    }
+                } else {
+                    tileid = tile_plane_middle_zx;
+                }
+            } else {
+                if (z == 0) {
+                    tileid = tile_plane_middle_xy;
+                } else {
+                    tileid = tile_middle;
+                }
+            }
+        }
+        fprintf (fp_xml,
+            "    <tileitem>\n"
+            "      <id>%d</id>\n"
+            "      <tileid>%d</tileid>\n"
+            "      <rotnum>%d</rotnum>\n"
+            "      <x>%d</x>\n"
+            "      <y>%d</y>\n"
+            "      <z>%d</z>\n"
+            "    </tileitem>\n"
+            , i, tileid, 0, x, y, z);
+        i ++;
+    }}}
+    fprintf (fp_xml, "  </targetsupertile>\n");
+
+#if 1
+    // test case
+/*
+<testcases>
+
+<testcaseitem>
+  <supertileid_base></supertileid_base>
+  <supertileid_test></supertileid_test>
+  <testposition>
+    <tileitem>
+      <x></x><y></y><z></z>
+      <rotnum></rotnum>
+    </tileitem>
+    <supertile>
+    </supertile>
+  </testposition>
+  <testposition>
+    <tileitem>
+      <x></x><y></y><z></z>
+      <rotnum></rotnum>
+    </tileitem>
+    <supertile>
+    </supertile>
+  </testposition>
+</testcaseitem>
+
+</testcases>
+*/
+    fprintf (fp_xml, "  <testcases>\n");
+#if 1
+    // tile_corner + tile_edge_start_x
+    fprintf (fp_xml,
+        "    <testcaseitem>\n"
+        "      <supertileid_base>%d</supertileid_base>\n"
+        , tile_corner);
+    fprintf (fp_xml,
+        "      <supertileid_test>%d</supertileid_test>\n"
+        "      <testposition>\n"
+        "        <tileitem> <!-- the position of the test supertile -->\n"
+        "          <rotnum>%d</rotnum>\n"
+        "          <x>%d</x>\n"
+        "          <y>%d</y>\n"
+        "          <z>%d</z>\n"
+        "        </tileitem>\n"
+        , tile_edge_start_x, 0, /*maxtest.x*/1 + 1, /*maxtest.y*/1 + 0, /*maxtest.z*/1 + 0);
+    fprintf (fp_xml,
+        "        <supertile>\n"
+        "          <id>%d</id>\n"
+        "          <quantity>%d</quantity>\n"
+        "          <birth>%d</birth>\n"
+        , 0, 1, 0);
+    i = 0;
+    fprintf (fp_xml,
+        "          <tileitem>\n"
+        "            <id>%d</id>\n"
+        "            <tileid>%d</tileid>\n"
+        "            <rotnum>%d</rotnum>\n"
+        "            <x>%d</x>\n"
+        "            <y>%d</y>\n"
+        "            <z>%d</z>\n"
+        "          </tileitem>\n"
+        , i, tile_corner, 0, 0, 0, 0);
+    i ++;
+    fprintf (fp_xml,
+        "          <tileitem>\n"
+        "            <id>%d</id>\n"
+        "            <tileid>%d</tileid>\n"
+        "            <rotnum>%d</rotnum>\n"
+        "            <x>%d</x>\n"
+        "            <y>%d</y>\n"
+        "            <z>%d</z>\n"
+        "          </tileitem>\n"
+        , i, tile_edge_start_x, 0, 1, 0, 0);
+    i ++;
+    fprintf (fp_xml, "        </supertile>\n");
+    fprintf (fp_xml,
+        "      </testposition>\n"
+        "    </testcaseitem>\n"
+        );
+
+    // tile_corner + tile_edge_start_y
+    fprintf (fp_xml,
+        "    <testcaseitem>\n"
+        "      <supertileid_base>%d</supertileid_base>\n"
+        , tile_corner);
+    fprintf (fp_xml,
+        "      <supertileid_test>%d</supertileid_test>\n"
+        "      <testposition>\n"
+        "        <tileitem> <!-- the position of the test supertile -->\n"
+        "          <rotnum>%d</rotnum>\n"
+        "          <x>%d</x>\n"
+        "          <y>%d</y>\n"
+        "          <z>%d</z>\n"
+        "        </tileitem>\n"
+        , tile_edge_start_y, 0, /*maxtest.x*/1 + 0, /*maxtest.y*/1 + 1, /*maxtest.z*/1 + 0);
+    fprintf (fp_xml,
+        "        <supertile>\n"
+        "          <id>%d</id>\n"
+        "          <quantity>%d</quantity>\n"
+        "          <birth>%d</birth>\n"
+        , 0, 1, 0);
+    i = 0;
+    fprintf (fp_xml,
+        "          <tileitem>\n"
+        "            <id>%d</id>\n"
+        "            <tileid>%d</tileid>\n"
+        "            <rotnum>%d</rotnum>\n"
+        "            <x>%d</x>\n"
+        "            <y>%d</y>\n"
+        "            <z>%d</z>\n"
+        "          </tileitem>\n"
+        , i, tile_corner, 0, 0, 0, 0);
+    i ++;
+    fprintf (fp_xml,
+        "          <tileitem>\n"
+        "            <id>%d</id>\n"
+        "            <tileid>%d</tileid>\n"
+        "            <rotnum>%d</rotnum>\n"
+        "            <x>%d</x>\n"
+        "            <y>%d</y>\n"
+        "            <z>%d</z>\n"
+        "          </tileitem>\n"
+        , i, tile_edge_start_y, 0, 0, 1, 0);
+    i ++;
+    fprintf (fp_xml, "        </supertile>\n");
+    fprintf (fp_xml,
+        "      </testposition>\n"
+        "    </testcaseitem>\n"
+        );
+
+    // tile_corner + tile_edge_start_z
+    fprintf (fp_xml,
+        "    <testcaseitem>\n"
+        "      <supertileid_base>%d</supertileid_base>\n"
+        , tile_corner);
+    fprintf (fp_xml,
+        "      <supertileid_test>%d</supertileid_test>\n"
+        "      <testposition>\n"
+        "        <tileitem> <!-- the position of the test supertile -->\n"
+        "          <rotnum>%d</rotnum>\n"
+        "          <x>%d</x>\n"
+        "          <y>%d</y>\n"
+        "          <z>%d</z>\n"
+        "        </tileitem>\n"
+        , tile_edge_start_z, 0, /*maxtest.x*/1 + 0, /*maxtest.y*/1 + 0, /*maxtest.z*/1 + 1);
+    fprintf (fp_xml,
+        "        <supertile>\n"
+        "          <id>%d</id>\n"
+        "          <quantity>%d</quantity>\n"
+        "          <birth>%d</birth>\n"
+        , 0, 1, 0);
+    i = 0;
+    fprintf (fp_xml,
+        "          <tileitem>\n"
+        "            <id>%d</id>\n"
+        "            <tileid>%d</tileid>\n"
+        "            <rotnum>%d</rotnum>\n"
+        "            <x>%d</x>\n"
+        "            <y>%d</y>\n"
+        "            <z>%d</z>\n"
+        "          </tileitem>\n"
+        , i, tile_corner, 0, 0, 0, 0);
+    i ++;
+    fprintf (fp_xml,
+        "          <tileitem>\n"
+        "            <id>%d</id>\n"
+        "            <tileid>%d</tileid>\n"
+        "            <rotnum>%d</rotnum>\n"
+        "            <x>%d</x>\n"
+        "            <y>%d</y>\n"
+        "            <z>%d</z>\n"
+        "          </tileitem>\n"
+        , i, tile_edge_start_z, 0, 0, 0, 1);
+    i ++;
+    fprintf (fp_xml, "        </supertile>\n");
+    fprintf (fp_xml,
+        "      </testposition>\n"
+        "    </testcaseitem>\n"
+        );
+
+    // tile_edge_start_x + i, tile_edge_start_x + i + 1
+    for (i = tile_edge_start_x; i < tile_end_x; i ++) {
+        fprintf (fp_xml,
+            "    <testcaseitem>\n"
+            "      <supertileid_base>%d</supertileid_base>\n"
+            , i);
+        fprintf (fp_xml,
+            "      <supertileid_test>%d</supertileid_test>\n"
+            "      <testposition>\n"
+            "        <tileitem> <!-- the position of the test supertile -->\n"
+            "          <rotnum>%d</rotnum>\n"
+            "          <x>%d</x>\n"
+            "          <y>%d</y>\n"
+            "          <z>%d</z>\n"
+            "        </tileitem>\n"
+            , i + 1, 0, /*maxtest.x*/1 + 1, /*maxtest.y*/1 + 0, /*maxtest.z*/1 + 0);
+        fprintf (fp_xml,
+            "        <supertile>\n"
+            "          <id>%d</id>\n"
+            "          <quantity>%d</quantity>\n"
+            "          <birth>%d</birth>\n"
+            , 0, 1, 0);
+        fprintf (fp_xml,
+            "          <tileitem>\n"
+            "            <id>%d</id>\n"
+            "            <tileid>%d</tileid>\n"
+            "            <rotnum>%d</rotnum>\n"
+            "            <x>%d</x>\n"
+            "            <y>%d</y>\n"
+            "            <z>%d</z>\n"
+            "          </tileitem>\n"
+            , 0, i, 0, 0, 0, 0);
+        fprintf (fp_xml,
+            "          <tileitem>\n"
+            "            <id>%d</id>\n"
+            "            <tileid>%d</tileid>\n"
+            "            <rotnum>%d</rotnum>\n"
+            "            <x>%d</x>\n"
+            "            <y>%d</y>\n"
+            "            <z>%d</z>\n"
+            "          </tileitem>\n"
+            , 1, i + 1, 0, 1, 0, 0);
+        fprintf (fp_xml, "        </supertile>\n");
+        fprintf (fp_xml,
+            "      </testposition>\n"
+            "    </testcaseitem>\n"
+            );
+    }
+
+    // tile_edge_start_y + i, tile_edge_start_y + i + 1
+    for (i = tile_edge_start_y; i < tile_end_y; i ++) {
+        fprintf (fp_xml,
+            "    <testcaseitem>\n"
+            "      <supertileid_base>%d</supertileid_base>\n"
+            , i);
+        fprintf (fp_xml,
+            "      <supertileid_test>%d</supertileid_test>\n"
+            "      <testposition>\n"
+            "        <tileitem> <!-- the position of the test supertile -->\n"
+            "          <rotnum>%d</rotnum>\n"
+            "          <x>%d</x>\n"
+            "          <y>%d</y>\n"
+            "          <z>%d</z>\n"
+            "        </tileitem>\n"
+            , i + 1, 0, /*maxtest.x*/1 + 0, /*maxtest.y*/1 + 1, /*maxtest.z*/1 + 0);
+        fprintf (fp_xml,
+            "        <supertile>\n"
+            "          <id>%d</id>\n"
+            "          <quantity>%d</quantity>\n"
+            "          <birth>%d</birth>\n"
+            , 0, 1, 0);
+        fprintf (fp_xml,
+            "          <tileitem>\n"
+            "            <id>%d</id>\n"
+            "            <tileid>%d</tileid>\n"
+            "            <rotnum>%d</rotnum>\n"
+            "            <x>%d</x>\n"
+            "            <y>%d</y>\n"
+            "            <z>%d</z>\n"
+            "          </tileitem>\n"
+            , 0, i, 0, 0, 0, 0);
+        fprintf (fp_xml,
+            "          <tileitem>\n"
+            "            <id>%d</id>\n"
+            "            <tileid>%d</tileid>\n"
+            "            <rotnum>%d</rotnum>\n"
+            "            <x>%d</x>\n"
+            "            <y>%d</y>\n"
+            "            <z>%d</z>\n"
+            "          </tileitem>\n"
+            , 1, i + 1, 0, 0, 1, 0);
+        fprintf (fp_xml, "        </supertile>\n");
+        fprintf (fp_xml,
+            "      </testposition>\n"
+            "    </testcaseitem>\n"
+            );
+    }
+#endif
+
+    // tile_edge_start_z + i, tile_edge_start_z + i + 1
+    for (i = tile_edge_start_z; i < tile_end_z; i ++) {
+        fprintf (fp_xml,
+            "    <testcaseitem>\n"
+            "      <supertileid_base>%d</supertileid_base>\n"
+            , i);
+        fprintf (fp_xml,
+            "      <supertileid_test>%d</supertileid_test>\n"
+            "      <testposition>\n"
+            "        <tileitem> <!-- the position of the test supertile -->\n"
+            "          <rotnum>%d</rotnum>\n"
+            "          <x>%d</x>\n"
+            "          <y>%d</y>\n"
+            "          <z>%d</z>\n"
+            "        </tileitem>\n"
+            , i + 1, 0, /*maxtest.x*/1 + 0, /*maxtest.y*/1 + 0, /*maxtest.z*/1 + 1);
+        fprintf (fp_xml,
+            "        <supertile>\n"
+            "          <id>%d</id>\n"
+            "          <quantity>%d</quantity>\n"
+            "          <birth>%d</birth>\n"
+            , 0, 1, 0);
+        fprintf (fp_xml,
+            "          <tileitem>\n"
+            "            <id>%d</id>\n"
+            "            <tileid>%d</tileid>\n"
+            "            <rotnum>%d</rotnum>\n"
+            "            <x>%d</x>\n"
+            "            <y>%d</y>\n"
+            "            <z>%d</z>\n"
+            "          </tileitem>\n"
+            , 0, i, 0, 0, 0, 0);
+        fprintf (fp_xml,
+            "          <tileitem>\n"
+            "            <id>%d</id>\n"
+            "            <tileid>%d</tileid>\n"
+            "            <rotnum>%d</rotnum>\n"
+            "            <x>%d</x>\n"
+            "            <y>%d</y>\n"
+            "            <z>%d</z>\n"
+            "          </tileitem>\n"
+            , 1, i + 1, 0, 0, 0, 1);
+        fprintf (fp_xml, "        </supertile>\n");
+        fprintf (fp_xml,
+            "      </testposition>\n"
+            "    </testcaseitem>\n"
+            );
+    }
+    fprintf (fp_xml, "  </testcases>\n");
+#endif
+
+    fprintf (fp_xml, "</tilesim>\n");
+    fclose (fp_xml);
+    return 0;
+}
+
+static void
+version (FILE *out_stream)
+{
+    fprintf( out_stream, "Cube Creator for SSS version %d.%d\n", VERSION_MAJOR, VERSION_MINOR);
+    fprintf( out_stream, "Copyright 2009 Yunhui Fu (yhfudev@gmail.com)\n\n" );
+}
+
+static void
+help (FILE *out_stream, const char *progname)
+{
+    static const char *help_msg[] = {
+        "Command line version of Cube (3D) Creator for Supertile Simulation System", 
+        "",
+        "-n --cubesize  <size>      specify the cube size",
+        "-a --maxtiles  <size>      specify the maxium number of tiles",
+        "-m --multiple  <multiple>  specify the number of target supertiles",
+        "-t --temperature <temperature> replace the temperature of the system",
+        "-o --outprefix <prefix>    specify the prefix of the output xml file",
+
+        "-V --version               display version information",
+        "   --help                  display this help",
+        "-v --verbose               be verbose",
+        0 };
+   const char **p = help_msg;
+
+   fprintf (out_stream, "Usage: %s [options]\n", progname);
+   while (*p) fprintf (out_stream, "%s\n", *p++);
+}
+
+int
+main (int argc, char *argv[])
+{
+    const char *fn_out = "testcube";
+    char fname[300];
+    size_t n = 0;
+    size_t sz_max_tiles = 0;
+    size_t multiple = 0;
+    size_t temperature = 3;
+    int c;
+    struct option longopts[]  = {
+        { "cubesize", 1, 0, 'n' },
+        { "maxtiles",   1, 0, 'a' },
+        { "multiple",   1, 0, 'm' },
+        { "temperature",1, 0, 't' },
+        { "outprefix",  1, 0, 'o' },
+        { "version",    0, 0, 'V' },
+        { "help",       0, 0, 501 },
+        { "verbose",    0, 0, 'v' },
+        { 0,            0, 0,  0  },
+    };
+    while ((c = getopt_long( argc, argv, "n:m:t:o:a:VLv", longopts, NULL )) != EOF) {
+        switch (c) {
+        case 'n': n = atoi (optarg); break;
+        case 'a': sz_max_tiles = atoi (optarg); break;
+        case 'm': multiple = atoi (optarg); break;
+        case 'o': fn_out = optarg; break;
+        case 't': temperature = atoi (optarg); break;
+        case 'V': version (stdout); exit(1); break;
+        case 'v': break;
+        default:
+        case 501: help (stdout, argv[0]); exit(1); break;
+        }
+    }
+    if (optind == argc) {
+        if (0 == n) {
+            version (stderr);
+            fprintf (stderr, "Use --help for help\n" );
+            exit(1);
+        }
+    }
+    if ((sz_max_tiles != 0) && (multiple != 0)) {
+        version (stderr);
+        fprintf (stderr, "Please specify --maxtiles or --multiple only once.\n" );
+        exit(1);
+    }
+    if ((sz_max_tiles == 0) && (multiple == 0)) {
+        multiple = 100;
+    }
+    if (sz_max_tiles == 0) {
+        assert (multiple > 0);
+        sz_max_tiles = multiple * n * n;
+    }
+
+    sprintf (fname, "%s_skeleton.xml", fn_out);
+    if (out_cube_skeleton (n, sz_max_tiles, temperature, fname) < 0) {
+        return 1;
+    }
+    return 0;
+}
